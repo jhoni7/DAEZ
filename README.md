@@ -1,4 +1,4 @@
-Esta app se realizo solo con un fien, poder leer mangas en otros idiomas, sepan disculpar ls errores, es mi primera app en kotlin, 
+Esta app se realizo solo con un fin, poder leer mangas en otros idiomas, ya muchos scan estan cerrando y algunos mangas / manwhas noo estan licenciados al español, sepan disculpar los errores, es mi primera app en kotlin, 
 
 la app genera "textview" en pequeños contenedores con las traducciones.
 se recomiendo celulares con ANDROID 10 Y MAS DE 2GB RAM, menos de esa memoria se vuelve lento ya que carga los idiomas y ejecuta todo de manera offline.
