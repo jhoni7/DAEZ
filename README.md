@@ -43,3 +43,4 @@ Interfaz intuitiva y fácil de usar
 * nota: no tengo imaginacion para los nombres.
 * esta en su version 4.1 del alfa, tiene errores en colision de los texview, parpadeo en las traducciones mostrando por menos de 2 segundos y cerrando el contenedor del la traduccon, en japones algunos mamgas con mucho texto se vuelve inviable el uso ya que se suporponen los mismos textview impidiento la lectura, por momento son los errores que encontre y estoy por solucionar.
 * esta app durante el proceso se uso IA, ya que aun estoy aprendiendo kotlin, por lo que podran encontrar algunos comentarios explicativos en partes del codigo.
+* por si quieren probar la app ya compilada - https://drive.google.com/file/d/1fLB-7Mi8bVxKynp36IGpXwVQVoJt7hWW/view?usp=drivesdk 
