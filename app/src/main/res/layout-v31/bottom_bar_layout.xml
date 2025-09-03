@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/bottom_bar_layout"
+    android:layout_width="wrap_content"
+    android:layout_height="60dp"
+    android:orientation="horizontal"
+    android:gravity="center"
+    android:layout_gravity="center_horizontal"
+    android:background="@android:color/transparent"
+    android:padding="8dp">
+
+    <Button
+        android:id="@+id/capture_button"
+        android:layout_width="140dp"
+        android:layout_height="wrap_content"
+        android:text="Capturar"
+        android:textColor="@android:color/white"
+        android:textSize="16sp"
+        android:background="@drawable/button_capture_background"
+        android:stateListAnimator="@null"
+        android:outlineProvider="background"
+        android:clipToOutline="true" />
+</LinearLayout>

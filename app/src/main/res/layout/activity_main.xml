@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="24dp"
+    android:background="#FAFAFA"
+    tools:context=".MainActivity">
+
+    <!-- Título de la aplicación -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Screen Translator"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="#333333"
+        android:layout_marginBottom="32dp"
+        android:gravity="center" />
+
+    <!-- Settings Button -->
+    <Button
+        android:id="@+id/btn_settings"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Configuración"
+        android:layout_marginBottom="16dp"
+        android:textColor="#FFFFFF"
+        android:background="@drawable/button_settings_background"
+        android:drawableLeft="@android:drawable/ic_menu_preferences"
+        android:drawablePadding="8dp"
+        android:gravity="center" />
+
+    <!-- Start Service Button -->
+    <Button
+        android:id="@+id/btn_start_service"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Iniciar Servicio de Traducción"
+        android:layout_marginBottom="16dp"
+        android:textColor="#FFFFFF"
+        android:background="@drawable/button_capture_background"
+        android:drawableLeft="@android:drawable/ic_media_play"
+        android:drawablePadding="8dp"
+        android:gravity="center" />
+
+    <!-- Stop Service Button -->
+    <Button
+        android:id="@+id/btn_stop_service"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Detener Servicio"
+        android:layout_marginBottom="16dp"
+        android:textColor="#FFFFFF"
+        android:background="@drawable/button_stop_background"
+        android:drawableLeft="@android:drawable/ic_media_pause"
+        android:drawablePadding="8dp"
+        android:gravity="center"
+        android:enabled="false" />
+
+    <!-- Settings Container -->
+    <LinearLayout
+        android:id="@+id/settings_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:layout_marginTop="32dp"
+        android:background="@drawable/settings_menu_background"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Configuración de Traducción"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#333333"
+            android:layout_marginBottom="16dp"
+            android:layout_gravity="center" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Idioma Origen:"
+            android:textSize="14sp"
+            android:textColor="#333333"
+            android:layout_marginBottom="6dp" />
+
+        <Spinner
+            android:id="@+id/source_language_spinner"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/spinner_background"
+            android:paddingHorizontal="12dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Idioma Destino:"
+            android:textSize="14sp"
+            android:textColor="#333333"
+            android:layout_marginBottom="6dp" />
+
+        <Spinner
+            android:id="@+id/target_language_spinner"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/spinner_background"
+            android:paddingHorizontal="12dp" />
+
+        <TextView
+            android:id="@+id/font_size_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tamaño de fuente: 16sp"
+            android:textSize="14sp"
+            android:textColor="#333333"
+            android:layout_marginBottom="6dp" />
+
+        <SeekBar
+            android:id="@+id/font_size_seekbar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
+            android:max="32"
+            android:min="12"
+            android:progress="16" />
+
+    </LinearLayout>
+
+    <!-- Status TextView -->
+    <TextView
+        android:id="@+id/status_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Estado: Servicio detenido"
+        android:textSize="14sp"
+        android:textColor="#666666"
+        android:layout_marginTop="24dp"
+        android:gravity="center"
+        android:background="#F0F0F0"
+        android:padding="12dp" />
+
+    <!-- Info TextView -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Inicia el servicio para mostrar el botón flotante de captura en pantalla. Usa el botón de configuración para cambiar idiomas y tamaño de fuente."
+        android:textSize="12sp"
+        android:textColor="#888888"
+        android:layout_marginTop="16dp"
+        android:gravity="center"/>
+     <!-- android:lineSpacing="1dp" /> -->
+
+</LinearLayout>
