@@ -7,11 +7,16 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.provider.Settings
 import android.view.View
-import android.widget.*
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.SeekBar
+import android.widget.Spinner
+import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -43,7 +48,7 @@ class MainActivity : AppCompatActivity() {
     private var isSettingsVisible = false
     private var sourceLanguage = "auto"
     private var targetLanguage = "es"
-    private var fontSize = 16f
+    private var fontSize = 10f
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
