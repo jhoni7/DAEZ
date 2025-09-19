@@ -61,7 +61,7 @@
         android:text="Detener Servicio"
         android:textColor="#FFFFFF" />
 
-    <!-- Settings Container -->
+      <!-- Settings Container -->
     <LinearLayout
         android:id="@+id/settings_container"
         android:layout_width="match_parent"

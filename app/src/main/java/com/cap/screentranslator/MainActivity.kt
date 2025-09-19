@@ -36,8 +36,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSettings: Button
     private lateinit var btnStartService: Button
     private lateinit var btnStopService: Button
+    private var btnContinuousReading: Button? = null // Opcional - puede no existir en layout
     private lateinit var settingsContainer: LinearLayout
     private lateinit var statusText: TextView
+    private var continuousReadingStatus: TextView? = null // Opcional - puede no existir en layout
     private lateinit var sourceLanguageSpinner: Spinner
     private lateinit var targetLanguageSpinner: Spinner
     private lateinit var fontSizeSeekBar: SeekBar
@@ -46,6 +48,7 @@ class MainActivity : AppCompatActivity() {
     // State
     private var isServiceRunning = false
     private var isSettingsVisible = false
+    private var isContinuousReadingActive = false
     private var sourceLanguage = "auto"
     private var targetLanguage = "es"
     private var fontSize = 10f
@@ -68,6 +71,9 @@ class MainActivity : AppCompatActivity() {
         btnSettings = findViewById(R.id.btn_settings)
         btnStartService = findViewById(R.id.btn_start_service)
         btnStopService = findViewById(R.id.btn_stop_service)
+
+
+
         settingsContainer = findViewById(R.id.settings_container)
         statusText = findViewById(R.id.status_text)
         sourceLanguageSpinner = findViewById(R.id.source_language_spinner)
@@ -91,6 +97,32 @@ class MainActivity : AppCompatActivity() {
             if (isServiceRunning) {
                 stopService()
             }
+        }
+
+        // Configurar listener solo si el botón existe
+        btnContinuousReading?.setOnClickListener {
+            toggleContinuousReading()
+        }
+    }
+
+    private fun toggleContinuousReading() {
+        if (isServiceRunning) {
+            // Enviar broadcast para alternar lectura continua
+            val toggleIntent = Intent("TOGGLE_CONTINUOUS_READING")
+            sendBroadcast(toggleIntent)
+
+            // Actualizar estado local (se actualizará correctamente cuando el servicio responda)
+            isContinuousReadingActive = !isContinuousReadingActive
+            updateUI()
+
+            val message = if (isContinuousReadingActive) {
+                "Lectura continua activada - También puedes mantener presionado el botón flotante por 3 segundos"
+            } else {
+                "Lectura continua desactivada"
+            }
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        } else {
+            Toast.makeText(this, "Primero debes iniciar el servicio de traducción", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -253,12 +285,18 @@ class MainActivity : AppCompatActivity() {
         isServiceRunning = true
         updateUI()
 
-        Toast.makeText(this, "Servicio de traducción iniciado. Usa el botón flotante para capturar.", Toast.LENGTH_LONG).show()
+        Toast.makeText(this,
+            "Servicio de traducción iniciado.\n" +
+                    "• Presiona el botón flotante para captura única\n" +
+                    "• Mantén presionado 3 segundos para lectura continua (cada 10 seg)" +
+                    if (btnContinuousReading != null) "\n• O usa el botón de lectura continua en esta pantalla" else "",
+            Toast.LENGTH_LONG).show()
     }
 
     private fun stopService() {
         stopService(mainService)
         isServiceRunning = false
+        isContinuousReadingActive = false
         updateUI()
         Toast.makeText(this, "Servicio de traducción detenido", Toast.LENGTH_SHORT).show()
     }
@@ -266,6 +304,7 @@ class MainActivity : AppCompatActivity() {
     private fun updateUI() {
         btnStartService.isEnabled = !isServiceRunning
         btnStopService.isEnabled = isServiceRunning
+        btnContinuousReading?.isEnabled = isServiceRunning
 
         if (isServiceRunning) {
             statusText.text = "Estado: Servicio activo - Botón flotante disponible"
@@ -277,6 +316,33 @@ class MainActivity : AppCompatActivity() {
             statusText.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark))
             btnStartService.text = "Iniciar Servicio de Traducción"
             btnStopService.text = "Detener Servicio"
+        }
+
+        // Actualizar estado de lectura continua solo si los componentes existen
+        btnContinuousReading?.let { btnContinuous ->
+            if (isContinuousReadingActive) {
+                btnContinuous.text = "Desactivar Lectura Continua"
+                btnContinuous.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_orange_dark))
+            } else {
+                btnContinuous.text = "Activar Lectura Continua"
+                btnContinuous.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_blue_bright))
+            }
+        }
+
+        continuousReadingStatus?.let { statusView ->
+            if (isContinuousReadingActive) {
+                statusView.text = "Lectura Continua: ACTIVA (captura cada 10 segundos)"
+                statusView.setTextColor(ContextCompat.getColor(this, android.R.color.holo_orange_dark))
+                statusView.visibility = View.VISIBLE
+            } else {
+                statusView.text = "Lectura Continua: INACTIVA"
+                statusView.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
+                if (isServiceRunning) {
+                    statusView.visibility = View.VISIBLE
+                } else {
+                    statusView.visibility = View.GONE
+                }
+            }
         }
     }
 

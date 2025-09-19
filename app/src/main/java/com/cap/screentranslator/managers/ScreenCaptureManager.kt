@@ -29,107 +29,221 @@ class ScreenCaptureManager(private val context: Context) {
 
     private val handler = Handler(Looper.getMainLooper())
 
+    // Estado para manejo de errores
+    private var isSetupComplete = false
+    private var captureInProgress = false
+
     fun setupMediaProjection(resultCode: Int, data: Intent) {
         try {
+            Log.d("ScreenCapture", "Starting MediaProjection setup")
+
+            // Limpiar cualquier configuración previa
+            cleanup()
+
             mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data)
 
             mediaProjection?.registerCallback(object : MediaProjection.Callback() {
                 override fun onStop() {
                     super.onStop()
                     Log.d("ScreenCapture", "MediaProjection stopped")
+                    isSetupComplete = false
                     cleanup()
+                }
+
+                override fun onCapturedContentResize(width: Int, height: Int) {
+                    super.onCapturedContentResize(width, height)
+                    Log.d("ScreenCapture", "Content resized: ${width}x${height}")
+                }
+
+                override fun onCapturedContentVisibilityChanged(isVisible: Boolean) {
+                    super.onCapturedContentVisibilityChanged(isVisible)
+                    Log.d("ScreenCapture", "Content visibility changed: $isVisible")
                 }
             }, handler)
 
             createImageReader()
             createVirtualDisplay()
 
+            isSetupComplete = true
             Log.d("ScreenCapture", "MediaProjection setup complete")
 
+        } catch (e: SecurityException) {
+            Log.e("ScreenCapture", "Security error setting up MediaProjection", e)
+            isSetupComplete = false
         } catch (e: Exception) {
             Log.e("ScreenCapture", "Error setting up MediaProjection", e)
+            isSetupComplete = false
         }
     }
 
     private fun createImageReader() {
-        val displayMetrics = DisplayMetrics()
-        windowManager.defaultDisplay.getMetrics(displayMetrics)
+        try {
+            val displayMetrics = DisplayMetrics()
+            windowManager.defaultDisplay.getMetrics(displayMetrics)
 
-        imageReader = ImageReader.newInstance(
-            displayMetrics.widthPixels,
-            displayMetrics.heightPixels,
-            PixelFormat.RGBA_8888,
-            2
-        )
+            // Cerrar ImageReader anterior si existe
+            imageReader?.close()
 
-        Log.d("ScreenCapture", "ImageReader created: ${displayMetrics.widthPixels}x${displayMetrics.heightPixels}")
+            imageReader = ImageReader.newInstance(
+                displayMetrics.widthPixels,
+                displayMetrics.heightPixels,
+                PixelFormat.RGBA_8888,
+                2 // Mantener 2 imágenes en buffer
+            )
+
+            // Configurar listener para manejo de imágenes disponibles
+            imageReader?.setOnImageAvailableListener({ reader ->
+                // Solo procesar si hay una captura en progreso
+                if (captureInProgress) {
+                    Log.d("ScreenCapture", "Image available from ImageReader")
+                }
+            }, handler)
+
+            Log.d("ScreenCapture", "ImageReader created: ${displayMetrics.widthPixels}x${displayMetrics.heightPixels}")
+
+        } catch (e: Exception) {
+            Log.e("ScreenCapture", "Error creating ImageReader", e)
+            throw e
+        }
     }
 
     private fun createVirtualDisplay() {
-        val displayMetrics = DisplayMetrics()
-        windowManager.defaultDisplay.getMetrics(displayMetrics)
+        try {
+            val displayMetrics = DisplayMetrics()
+            windowManager.defaultDisplay.getMetrics(displayMetrics)
 
-        virtualDisplay = mediaProjection?.createVirtualDisplay(
-            "ScreenTranslatorCapture",
-            displayMetrics.widthPixels,
-            displayMetrics.heightPixels,
-            displayMetrics.densityDpi,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            imageReader?.surface,
-            object : VirtualDisplay.Callback() {
-                override fun onPaused() {
-                    super.onPaused()
-                    Log.d("ScreenCapture", "VirtualDisplay paused")
-                }
+            // Liberar VirtualDisplay anterior si existe
+            virtualDisplay?.release()
 
-                override fun onResumed() {
-                    super.onResumed()
-                    Log.d("ScreenCapture", "VirtualDisplay resumed")
-                }
+            virtualDisplay = mediaProjection?.createVirtualDisplay(
+                "ScreenTranslatorCapture",
+                displayMetrics.widthPixels,
+                displayMetrics.heightPixels,
+                displayMetrics.densityDpi,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                imageReader?.surface,
+                object : VirtualDisplay.Callback() {
+                    override fun onPaused() {
+                        super.onPaused()
+                        Log.d("ScreenCapture", "VirtualDisplay paused")
+                    }
 
-                override fun onStopped() {
-                    super.onStopped()
-                    Log.d("ScreenCapture", "VirtualDisplay stopped")
-                }
-            },
-            handler
-        )
+                    override fun onResumed() {
+                        super.onResumed()
+                        Log.d("ScreenCapture", "VirtualDisplay resumed")
+                    }
 
-        Log.d("ScreenCapture", "VirtualDisplay created")
+                    override fun onStopped() {
+                        super.onStopped()
+                        Log.d("ScreenCapture", "VirtualDisplay stopped")
+                        isSetupComplete = false
+                    }
+                },
+                handler
+            )
+
+            Log.d("ScreenCapture", "VirtualDisplay created")
+
+        } catch (e: Exception) {
+            Log.e("ScreenCapture", "Error creating VirtualDisplay", e)
+            throw e
+        }
     }
 
     fun captureScreen(callback: (Bitmap?) -> Unit) {
+        if (!isReady()) {
+            Log.e("ScreenCapture", "ScreenCapture not ready")
+            callback(null)
+            return
+        }
+
+        if (captureInProgress) {
+            Log.w("ScreenCapture", "Capture already in progress, ignoring request")
+            callback(null)
+            return
+        }
+
+        captureInProgress = true
+
+        try {
+            Log.d("ScreenCapture", "Starting screen capture")
+
+            // Pequeña pausa para asegurar que el buffer esté listo
+            handler.postDelayed({
+                performActualCapture(callback)
+            }, 100)
+
+        } catch (e: Exception) {
+            Log.e("ScreenCapture", "Error initiating screen capture", e)
+            captureInProgress = false
+            callback(null)
+        }
+    }
+
+    private fun performActualCapture(callback: (Bitmap?) -> Unit) {
         try {
             imageReader?.let { reader ->
-                val image = reader.acquireLatestImage()
-                if (image != null) {
-                    val bitmap = imageToBitmap(image)
-                    image.close()
+                // Intentar obtener la imagen más reciente
+                var image: Image? = null
+                var attempts = 0
+                val maxAttempts = 3
 
-                    if (bitmap != null) {
-                        // Aplicar el recorte de la barra de estado solo en Android 10-14
-                        val processedBitmap = if (shouldCropStatusBar()) {
-                            cropStatusBar(bitmap)
-                        } else {
-                            bitmap
+                while (image == null && attempts < maxAttempts) {
+                    try {
+                        image = reader.acquireLatestImage()
+                        if (image == null) {
+                            Log.d("ScreenCapture", "No image available, attempt ${attempts + 1}")
+                            Thread.sleep(50) // Breve pausa antes de reintentar
+                            attempts++
                         }
+                    } catch (e: Exception) {
+                        Log.w("ScreenCapture", "Error acquiring image on attempt ${attempts + 1}", e)
+                        attempts++
+                        Thread.sleep(50)
+                    }
+                }
 
-                        Log.d("ScreenCapture", "Screen captured successfully: ${processedBitmap.width}x${processedBitmap.height}")
-                        callback(processedBitmap)
-                    } else {
-                        Log.e("ScreenCapture", "Failed to convert image to bitmap")
-                        callback(null)
+                if (image != null) {
+                    try {
+                        val bitmap = imageToBitmap(image)
+
+                        if (bitmap != null && !bitmap.isRecycled) {
+                            // Aplicar el recorte de la barra de estado solo en Android 10-14
+                            val processedBitmap = if (shouldCropStatusBar()) {
+                                cropStatusBar(bitmap)
+                            } else {
+                                bitmap
+                            }
+
+                            Log.d("ScreenCapture", "Screen captured successfully: ${processedBitmap.width}x${processedBitmap.height}")
+                            captureInProgress = false
+                            callback(processedBitmap)
+                        } else {
+                            Log.e("ScreenCapture", "Failed to convert image to bitmap or bitmap is recycled")
+                            captureInProgress = false
+                            callback(null)
+                        }
+                    } finally {
+                        // Siempre cerrar la imagen para liberar memoria
+                        try {
+                            image.close()
+                        } catch (e: Exception) {
+                            Log.w("ScreenCapture", "Error closing image", e)
+                        }
                     }
                 } else {
-                    Log.e("ScreenCapture", "No image available")
+                    Log.e("ScreenCapture", "No image available after $maxAttempts attempts")
+                    captureInProgress = false
                     callback(null)
                 }
             } ?: run {
                 Log.e("ScreenCapture", "ImageReader is null")
+                captureInProgress = false
                 callback(null)
             }
         } catch (e: Exception) {
-            Log.e("ScreenCapture", "Error capturing screen", e)
+            Log.e("ScreenCapture", "Error performing actual capture", e)
+            captureInProgress = false
             callback(null)
         }
     }
@@ -137,20 +251,56 @@ class ScreenCaptureManager(private val context: Context) {
     private fun imageToBitmap(image: Image): Bitmap? {
         return try {
             val planes = image.planes
+            if (planes.isEmpty()) {
+                Log.e("ScreenCapture", "Image has no planes")
+                return null
+            }
+
             val buffer = planes[0].buffer
             val pixelStride = planes[0].pixelStride
             val rowStride = planes[0].rowStride
             val rowPadding = rowStride - pixelStride * image.width
+
+            Log.d("ScreenCapture", "Image properties - Width: ${image.width}, Height: ${image.height}, PixelStride: $pixelStride, RowStride: $rowStride, RowPadding: $rowPadding")
+
+            if (rowPadding < 0) {
+                Log.e("ScreenCapture", "Invalid row padding: $rowPadding")
+                return null
+            }
 
             val bitmap = Bitmap.createBitmap(
                 image.width + rowPadding / pixelStride,
                 image.height,
                 Bitmap.Config.ARGB_8888
             )
+
+            // Verificar que el buffer tenga suficientes datos
+            val expectedBytes = bitmap.byteCount
+            val availableBytes = buffer.remaining()
+
+            if (availableBytes < expectedBytes) {
+                Log.e("ScreenCapture", "Buffer too small: expected $expectedBytes, available $availableBytes")
+                bitmap.recycle()
+                return null
+            }
+
             bitmap.copyPixelsFromBuffer(buffer)
 
-            // Create a properly sized bitmap without padding
-            Bitmap.createBitmap(bitmap, 0, 0, image.width, image.height)
+            // Crear bitmap del tamaño correcto sin padding
+            val finalBitmap = if (rowPadding > 0) {
+                val croppedBitmap = Bitmap.createBitmap(bitmap, 0, 0, image.width, image.height)
+                bitmap.recycle() // Liberar bitmap temporal
+                croppedBitmap
+            } else {
+                bitmap
+            }
+
+            Log.d("ScreenCapture", "Bitmap created successfully: ${finalBitmap.width}x${finalBitmap.height}")
+            finalBitmap
+
+        } catch (e: OutOfMemoryError) {
+            Log.e("ScreenCapture", "Out of memory converting image to bitmap", e)
+            null
         } catch (e: Exception) {
             Log.e("ScreenCapture", "Error converting image to bitmap", e)
             null
@@ -170,6 +320,11 @@ class ScreenCaptureManager(private val context: Context) {
      */
     private fun cropStatusBar(originalBitmap: Bitmap): Bitmap {
         return try {
+            if (originalBitmap.isRecycled) {
+                Log.e("ScreenCapture", "Cannot crop recycled bitmap")
+                return originalBitmap
+            }
+
             val statusBarHeight = getStatusBarHeight()
 
             Log.d("ScreenCapture", "Status bar height detected: ${statusBarHeight}px")
@@ -206,6 +361,9 @@ class ScreenCaptureManager(private val context: Context) {
             }
 
             croppedBitmap
+        } catch (e: OutOfMemoryError) {
+            Log.e("ScreenCapture", "Out of memory cropping status bar", e)
+            originalBitmap
         } catch (e: Exception) {
             Log.e("ScreenCapture", "Error cropping status bar", e)
             originalBitmap
@@ -265,18 +423,86 @@ class ScreenCaptureManager(private val context: Context) {
     }
 
     fun isReady(): Boolean {
-        return mediaProjection != null && imageReader != null && virtualDisplay != null
+        val ready = isSetupComplete &&
+                mediaProjection != null &&
+                imageReader != null &&
+                virtualDisplay != null &&
+                !captureInProgress
+
+        Log.d("ScreenCapture", "isReady: $ready (setup: $isSetupComplete, projection: ${mediaProjection != null}, reader: ${imageReader != null}, display: ${virtualDisplay != null}, capturing: $captureInProgress)")
+        return ready
+    }
+
+    /**
+     * Verifica si hay una captura en progreso
+     */
+    fun isCaptureInProgress(): Boolean = captureInProgress
+
+    /**
+     * Cancela una captura en progreso (para casos de timeout)
+     */
+    fun cancelCapture() {
+        if (captureInProgress) {
+            Log.w("ScreenCapture", "Cancelling capture in progress")
+            captureInProgress = false
+        }
+    }
+
+    /**
+     * Reinicia el ScreenCaptureManager en caso de error
+     */
+    fun reset() {
+        Log.d("ScreenCapture", "Resetting ScreenCaptureManager")
+        captureInProgress = false
+        isSetupComplete = false
+
+        // Limpiar recursos actuales
+        cleanup()
+
+        Log.d("ScreenCapture", "ScreenCaptureManager reset complete")
     }
 
     fun cleanup() {
         try {
-            virtualDisplay?.release()
+            Log.d("ScreenCapture", "Starting cleanup")
+
+            captureInProgress = false
+            isSetupComplete = false
+
+            // Cancelar callbacks pendientes
+            handler.removeCallbacksAndMessages(null)
+
+            // Liberar VirtualDisplay
+            virtualDisplay?.let {
+                try {
+                    it.release()
+                    Log.d("ScreenCapture", "VirtualDisplay released")
+                } catch (e: Exception) {
+                    Log.w("ScreenCapture", "Error releasing VirtualDisplay", e)
+                }
+            }
             virtualDisplay = null
 
-            imageReader?.close()
+            // Cerrar ImageReader
+            imageReader?.let {
+                try {
+                    it.close()
+                    Log.d("ScreenCapture", "ImageReader closed")
+                } catch (e: Exception) {
+                    Log.w("ScreenCapture", "Error closing ImageReader", e)
+                }
+            }
             imageReader = null
 
-            mediaProjection?.stop()
+            // Detener MediaProjection
+            mediaProjection?.let {
+                try {
+                    it.stop()
+                    Log.d("ScreenCapture", "MediaProjection stopped")
+                } catch (e: Exception) {
+                    Log.w("ScreenCapture", "Error stopping MediaProjection", e)
+                }
+            }
             mediaProjection = null
 
             Log.d("ScreenCapture", "Cleanup completed")
