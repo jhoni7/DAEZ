@@ -38,6 +38,8 @@ Interfaz intuitiva y fácil de usar
 
 <img width="349" height="798" alt="image" src="https://github.com/user-attachments/assets/459e8e8e-2208-4412-bd5b-5b55fce978c9" /> <img width="351" height="794" alt="image" src="https://github.com/user-attachments/assets/a10eaa39-cd31-4997-b2ef-cf072e347ca3" />
 
+* vesion 4.6 / se corrigue error de colores que generaba el boton "capturar / continuo"
+
 * version 4.5 / implemetacion de boton para captura continua - al presionar el boton "capturar" por mas de 3 segundos inicia un bucle realizando de forma automatica cada 10 segundos una nueva traduccion - se desactiva al presionar el boton "continuo".
 
 * verisom 4.4 / mejora en la forma de captura del ocr para mejorar la traduccion .
