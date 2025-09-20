@@ -1,4 +1,4 @@
-Esta app se realizo solo con un fin, poder leer mangas en otros idiomas, ya muchos scan estan cerrando y algunos mangas / manwhas noo estan licenciados al español, sepan disculpar los errores, es mi primera app en kotlin, 
+Esta app se realizo solo con un fin, poder leer mangas en otros idiomas, ya muchos scan estan cerrando y algunos mangas / manwhas no estan licenciados al español, sepan disculpar los errores, es mi primera app en kotlin, 
 
 la app genera "textview" en pequeños contenedores con las traducciones.
 se recomiendo celulares con ANDROID 10 Y MAS DE 2GB RAM, menos de esa memoria se vuelve lento ya que carga los idiomas y ejecuta todo de manera offline.
@@ -38,10 +38,14 @@ Interfaz intuitiva y fácil de usar
 
 <img width="349" height="798" alt="image" src="https://github.com/user-attachments/assets/459e8e8e-2208-4412-bd5b-5b55fce978c9" /> <img width="351" height="794" alt="image" src="https://github.com/user-attachments/assets/a10eaa39-cd31-4997-b2ef-cf072e347ca3" />
 
+* version 4.5 / implemetacion de boton para captura continua - al presionar el boton "capturar" por mas de 3 segundos inicia un bucle realizando de forma automatica cada 10 segundos una nueva traduccion - se desactiva al presionar el boton "continuo".
+
+* verisom 4.4 / mejora en la forma de captura del ocr para mejorar la traduccion .
+
 * Version 4.3 /  se reparo el error de la supeposicion de textview, se implemento un recorte en la funcion de OCR donde omite la barra de estado desde android 10 hasta el 14, desde 15 el mismo sistema omite la captura de la barra y los botones virtuales. 
 
 * version 4.1 del alfa, tiene errores en colision de los texview, parpadeo en las traducciones mostrando por menos de 2 segundos y cerrando el contenedor del la traduccon, en japones algunos mamgas con mucho texto se vuelve inviable el uso ya que se suporponen los mismos textview impidiento la lectura, por momento son los errores que encontre y estoy por solucionar.
   
 * nota: no tengo imaginacion para los nombres.
-* esta app durante el proceso se uso IA, ya que aun estoy aprendiendo kotlin, por lo que podran encontrar algunos comentarios explicativos en partes del codigo.
+* esta app durante el proceso se uso IA en algunas partes del codigo, ya que aun estoy aprendiendo kotlin, por lo que podran encontrar algunos comentarios explicativos en partes del codigo.
 * por si quieren probar la app ya compilada - https://gofile.io/d/VjH42x
