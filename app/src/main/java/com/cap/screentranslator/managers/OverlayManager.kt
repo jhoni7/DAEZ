@@ -251,15 +251,16 @@ class OverlayManager(private val context: Context) {
 
     private fun updateButtonAppearance() {
         captureButton?.let { button ->
+            val context = button.context // o usa tu contexto almacenado
             if (isContinuousReading) {
                 // Cambiar apariencia para indicar modo continuo
                 button.text = "CONTINUO"
-                button.setBackgroundColor("#FF4CAF50".toColorInt()) // Verde
+                button.background = context.getDrawable(R.drawable.button_continuous_mode_background)
                 button.setTextColor(android.graphics.Color.WHITE)
             } else {
-                // Apariencia normal
+                // Apariencia normal - usa el mismo drawable que el botón original
                 button.text = "CAPTURAR"
-                button.setBackgroundColor("#FF2196F3".toColorInt()) // Azul
+                button.background = context.getDrawable(R.drawable.button_capture_background)
                 button.setTextColor(android.graphics.Color.WHITE)
             }
         }
