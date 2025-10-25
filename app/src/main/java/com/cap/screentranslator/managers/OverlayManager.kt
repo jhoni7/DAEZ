@@ -6,6 +6,7 @@ import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -16,6 +17,7 @@ import android.widget.TextView
 import androidx.core.graphics.toColorInt
 import com.cap.screentranslator.R
 import com.google.mlkit.vision.text.Text
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -53,6 +55,20 @@ class OverlayManager(private val context: Context) {
     private var continuousReadingRunnable: Runnable? = null
     private var longPressRunnable: Runnable? = null
     private var buttonPressStartTime = 0L
+
+    // botón flotante y arrastrable
+
+    private var initialTouchX = 0f
+    private var initialTouchY = 0f
+    private var initialX = 0
+    private var initialY = 0
+    private var isDragging = false
+
+    // trasparancia
+    private var fadeOutRunnable: Runnable? = null
+    private val fadeOutHandler = Handler(Looper.getMainLooper())
+    private val FADE_OUT_DELAY = 3000L // 3 segundos de inactividad
+
 
     // Configuraciones mejoradas
     companion object {
@@ -112,32 +128,133 @@ class OverlayManager(private val context: Context) {
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT
             ).apply {
-                gravity = android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL
+                gravity = Gravity.TOP or Gravity.START
+                x = 0
                 y = 100
             }
 
             windowManager.addView(bottomBarView, bottomBarParams)
             android.util.Log.d("OverlayManager", "Bottom bar shown successfully")
+
+            // Iniciar el timer de fade out
+            startFadeOutTimer()
+
         } catch (e: Exception) {
             android.util.Log.e("OverlayManager", "Error showing bottom bar", e)
         }
     }
 
     private fun setupBottomBarButtons() {
-        captureButton?.setOnTouchListener { _, event ->
+        // Iniciar el timer cuando se muestra el botón
+        startFadeOutTimer()
+
+        captureButton?.setOnTouchListener { view, event ->
+            val layoutParams = bottomBarView?.layoutParams as? WindowManager.LayoutParams ?: return@setOnTouchListener false
+
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    // Restaurar opacidad al tocar
+                    cancelFadeOut()
+
                     handleButtonDown()
+                    initialX = layoutParams.x
+                    initialY = layoutParams.y
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    isDragging = false
                     true
                 }
+
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - initialTouchX
+                    val dy = event.rawY - initialTouchY
+
+                    if (abs(dx) > 10 || abs(dy) > 10) {
+                        isDragging = true
+                        longPressRunnable?.let { handler.removeCallbacks(it) }
+                    }
+
+                    if (isDragging) {
+                        layoutParams.x = initialX + dx.toInt()
+                        layoutParams.y = initialY + dy.toInt()
+                        windowManager.updateViewLayout(bottomBarView, layoutParams)
+                    }
+                    true
+                }
+
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    handleButtonUp()
+                    if (!isDragging) {
+                        handleButtonUp()
+                    } else {
+                        constrainToScreen(layoutParams)
+                    }
+                    isDragging = false
+
+                    // Reiniciar el timer de fade out después de soltar
+                    startFadeOutTimer()
                     true
                 }
+
                 else -> false
             }
         }
     }
+
+    private fun constrainToScreen(params: WindowManager.LayoutParams) {
+        val displayMetrics = context.resources.displayMetrics
+        val screenWidth = displayMetrics.widthPixels
+        val screenHeight = displayMetrics.heightPixels
+
+        val view = bottomBarView ?: return
+        val buttonWidth = view.width
+        val buttonHeight = view.height
+
+        // Limitar coordenadas
+        params.x = params.x.coerceIn(0, screenWidth - buttonWidth)
+        params.y = params.y.coerceIn(0, screenHeight - buttonHeight)
+
+        windowManager.updateViewLayout(view, params)
+    }
+
+    // manejo de trasparencia
+    private fun startFadeOutTimer() {
+        // Cancelar cualquier fade anterior
+        fadeOutRunnable?.let { fadeOutHandler.removeCallbacks(it) }
+
+        // Restaurar opacidad completa
+        bottomBarView?.alpha = 1f
+
+        // Programar el fade out
+        fadeOutRunnable = Runnable {
+            bottomBarView?.animate()
+                ?.alpha(0.3f) // 30% de opacidad
+                ?.setDuration(500) // Duración de la animación
+                ?.start()
+        }
+
+        fadeOutHandler.postDelayed(fadeOutRunnable!!, FADE_OUT_DELAY)
+    }
+
+    // ocultar boton
+    fun hideBottomBar() {
+        try {
+            fadeOutRunnable?.let { fadeOutHandler.removeCallbacks(it) }
+            if (bottomBarView != null) {
+                windowManager.removeView(bottomBarView)
+                bottomBarView = null
+                captureButton = null
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("OverlayManager", "Error hiding bottom bar", e)
+        }
+    }
+
+    private fun cancelFadeOut() {
+        fadeOutRunnable?.let { fadeOutHandler.removeCallbacks(it) }
+        bottomBarView?.alpha = 1f
+    }
+
+
 
     private fun handleButtonDown() {
         val currentTime = System.currentTimeMillis()
@@ -1195,7 +1312,7 @@ class OverlayManager(private val context: Context) {
             val textView = TextView(context).apply {
                 this.text = text.trim()
                 setTextColor(android.graphics.Color.WHITE)
-                setBackgroundColor(android.graphics.Color.parseColor("#DD000000")) // Más opaco
+                setBackgroundColor("#DD000000".toColorInt()) // Más opaco
                 textSize = fontSize
                 setPadding(16, 12, 16, 12)
                 setShadowLayer(4f, 2f, 2f, android.graphics.Color.BLACK)

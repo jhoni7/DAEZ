@@ -1,12 +1,19 @@
 package com.cap.screentranslator
 
 import android.app.Service
-import android.content.*
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
-import com.cap.screentranslator.managers.*
+import com.cap.screentranslator.managers.LanguageDetector
+import com.cap.screentranslator.managers.OcrManager
+import com.cap.screentranslator.managers.OverlayManager
+import com.cap.screentranslator.managers.ScreenCaptureManager
+import com.cap.screentranslator.managers.TranslatorManager
 
 class MainService : Service() {
 
