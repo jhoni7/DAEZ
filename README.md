@@ -37,8 +37,12 @@ Interfaz intuitiva y fácil de usar
 <img width="347" height="782" alt="image" src="https://github.com/user-attachments/assets/55eb1dae-ef6b-4b18-bc7d-1f418b932479" /> <img width="360" height="798" alt="image" src="https://github.com/user-attachments/assets/6e2da922-6862-4134-8693-ebf56e255cc3" /> <img width="360" height="839" alt="image" src="https://github.com/user-attachments/assets/0de7c6a2-a05e-43c2-82bd-7aa3a8738978" />
 
 <img width="349" height="798" alt="image" src="https://github.com/user-attachments/assets/459e8e8e-2208-4412-bd5b-5b55fce978c9" /> <img width="351" height="794" alt="image" src="https://github.com/user-attachments/assets/a10eaa39-cd31-4997-b2ef-cf072e347ca3" />
+<img width="348" height="785" alt="image" src="https://github.com/user-attachments/assets/2e207920-4d05-4415-ac7b-91b037b5633a" />
 
-* version 4.6 / se corrigue error de colores que generaba el boton "capturar / continuo"
+
+* version 4.7 / se modifico el boton "capturar / conntinuo" haciendo que el mismo sea flotante y trasparente.
+
+* version 4.6 / se corrigue error de colores que generaba el boton "capturar / continuo".
 
 * version 4.5 / implemetacion de boton para captura continua - al presionar el boton "capturar" por mas de 3 segundos inicia un bucle realizando de forma automatica cada 10 segundos una nueva traduccion - se desactiva al presionar el boton "continuo".
 
