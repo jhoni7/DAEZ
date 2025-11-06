@@ -57,18 +57,16 @@ class OverlayManager(private val context: Context) {
     private var buttonPressStartTime = 0L
 
     // botón flotante y arrastrable
-
     private var initialTouchX = 0f
     private var initialTouchY = 0f
     private var initialX = 0
     private var initialY = 0
     private var isDragging = false
 
-    // trasparancia
+    // transparencia
     private var fadeOutRunnable: Runnable? = null
     private val fadeOutHandler = Handler(Looper.getMainLooper())
     private val FADE_OUT_DELAY = 3000L // 3 segundos de inactividad
-
 
     // Configuraciones mejoradas
     companion object {
@@ -216,7 +214,7 @@ class OverlayManager(private val context: Context) {
         windowManager.updateViewLayout(view, params)
     }
 
-    // manejo de trasparencia
+    // manejo de transparencia
     private fun startFadeOutTimer() {
         // Cancelar cualquier fade anterior
         fadeOutRunnable?.let { fadeOutHandler.removeCallbacks(it) }
@@ -253,8 +251,6 @@ class OverlayManager(private val context: Context) {
         fadeOutRunnable?.let { fadeOutHandler.removeCallbacks(it) }
         bottomBarView?.alpha = 1f
     }
-
-
 
     private fun handleButtonDown() {
         val currentTime = System.currentTimeMillis()
@@ -368,14 +364,14 @@ class OverlayManager(private val context: Context) {
 
     private fun updateButtonAppearance() {
         captureButton?.let { button ->
-            val context = button.context // o usa tu contexto almacenado
+            val context = button.context
             if (isContinuousReading) {
                 // Cambiar apariencia para indicar modo continuo
                 button.text = "CONTINUO"
                 button.background = context.getDrawable(R.drawable.button_continuous_mode_background)
                 button.setTextColor(android.graphics.Color.WHITE)
             } else {
-                // Apariencia normal - usa el mismo drawable que el botón original
+                // Apariencia normal
                 button.text = "CAPTURAR"
                 button.background = context.getDrawable(R.drawable.button_capture_background)
                 button.setTextColor(android.graphics.Color.WHITE)
@@ -456,7 +452,6 @@ class OverlayManager(private val context: Context) {
     private fun hideAllOverlaysTemporarily() {
         android.util.Log.d("OverlayManager", "Hiding overlays temporarily")
         bottomBarView?.visibility = View.GONE
-        // No ocultar translationView aquí para evitar parpadeo
     }
 
     fun restoreOverlaysAfterCapture() {
@@ -651,31 +646,58 @@ class OverlayManager(private val context: Context) {
     /**
      * Detecta globos de diálogo con mejor tolerancia a errores
      */
-    private fun detectDialogBubbles(visionText: Text): List<DialogBubble> {
+    fun detectDialogBubbles(visionText: Text): List<DialogBubble> {
         return try {
             val dialogBubbles = mutableListOf<DialogBubble>()
-            val processedElements = mutableSetOf<Text.Element>()
+            val allElements = mutableListOf<Text.Element>()
 
+            // Recopilar todos los elementos con sus bounding boxes
             for (textBlock in visionText.textBlocks) {
+                for (line in textBlock.lines) {
+                    for (element in line.elements) {
+                        if (element.boundingBox != null && element.text.isNotBlank()) {
+                            allElements.add(element)
+                        }
+                    }
+                }
+            }
+
+            if (allElements.isEmpty()) {
+                return createFallbackDialog(visionText)
+            }
+
+            // Agrupar elementos por proximidad espacial mejorada
+            val elementGroups = clusterElementsByProximity(allElements)
+
+            // Crear diálogos a partir de los grupos
+            for (group in elementGroups) {
                 try {
-                    val blockBubbles = analyzeTextBlockForDialogs(textBlock, processedElements)
-                    dialogBubbles.addAll(blockBubbles)
+                    val lines = visionText.textBlocks.flatMap { block -> block.lines }
+                        .filter { line -> line.elements.any { element -> group.contains(element) } }
+
+                    val dialog = createDialogFromElements(group, lines)
+                    if (dialog != null) {
+                        dialogBubbles.add(dialog)
+                    }
                 } catch (e: Exception) {
-                    android.util.Log.w("OverlayManager", "Error analyzing text block, skipping", e)
+                    android.util.Log.w("OverlayManager", "Error creating dialog from group", e)
                     continue
                 }
             }
 
-            // Filtrar y fusionar globos cercanos
+            // Filtrar y fusionar diálogos muy cercanos
             val validDialogs = filterValidDialogs(dialogBubbles)
-            val mergedDialogs = mergeNearbyDialogs(validDialogs)
+            val mergedDialogs = mergeOverlappingDialogs(validDialogs)
 
-            android.util.Log.d("OverlayManager", "Processed ${dialogBubbles.size} -> ${validDialogs.size} -> ${mergedDialogs.size} dialogs")
+            android.util.Log.d("OverlayManager", "Detected ${allElements.size} elements -> ${elementGroups.size} groups -> ${mergedDialogs.size} dialogs")
+
+            if (mergedDialogs.isEmpty()) {
+                return createFallbackDialog(visionText)
+            }
 
             mergedDialogs
         } catch (e: Exception) {
             android.util.Log.e("OverlayManager", "Error detecting dialog bubbles", e)
-            // En caso de error, crear un diálogo simple con todo el texto
             createFallbackDialog(visionText)
         }
     }
@@ -728,108 +750,106 @@ class OverlayManager(private val context: Context) {
         }
     }
 
-    // Los métodos restantes mantienen la misma lógica pero con mejor manejo de errores
-    private fun analyzeTextBlockForDialogs(
-        textBlock: Text.TextBlock,
-        processedElements: MutableSet<Text.Element>
-    ): List<DialogBubble> {
-        return try {
-            val dialogs = mutableListOf<DialogBubble>()
-            val blockElements = mutableListOf<Text.Element>()
-            val blockLines = mutableListOf<Text.Line>()
-
-            for (line in textBlock.lines) {
-                blockLines.add(line)
-                for (element in line.elements) {
-                    if (!processedElements.contains(element) && element.text.isNotBlank()) {
-                        blockElements.add(element)
-                        processedElements.add(element)
-                    }
-                }
-            }
-
-            if (blockElements.isEmpty()) return dialogs
-
-            val elementGroups = groupElementsByProximity(blockElements)
-
-            for (group in elementGroups) {
-                try {
-                    val dialog = createDialogFromElements(group, blockLines.filter { line ->
-                        line.elements.any { element -> group.contains(element) }
-                    })
-
-                    if (dialog != null) {
-                        dialogs.add(dialog)
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.w("OverlayManager", "Error creating dialog from group, skipping", e)
-                    continue
-                }
-            }
-
-            dialogs
-        } catch (e: Exception) {
-            android.util.Log.e("OverlayManager", "Error analyzing text block", e)
-            emptyList()
-        }
-    }
-
-    private fun groupElementsByProximity(elements: List<Text.Element>): List<List<Text.Element>> {
+    /**
+     * Agrupa elementos por proximidad espacial usando clustering mejorado
+     */
+    private fun clusterElementsByProximity(elements: List<Text.Element>): List<List<Text.Element>> {
         if (elements.isEmpty()) return emptyList()
+        if (elements.size == 1) return listOf(elements)
 
         return try {
-            val groups = mutableListOf<MutableList<Text.Element>>()
-            val processed = mutableSetOf<Text.Element>()
+            val clusters = mutableListOf<MutableList<Text.Element>>()
+            val processed = BooleanArray(elements.size)
 
-            for (element in elements) {
-                if (processed.contains(element)) continue
+            for (i in elements.indices) {
+                if (processed[i]) continue
 
-                val group = mutableListOf<Text.Element>()
-                val queue = mutableListOf(element)
+                val cluster = mutableListOf<Text.Element>()
+                val queue = mutableListOf(i)
 
                 while (queue.isNotEmpty()) {
-                    val current = queue.removeAt(0)
-                    if (processed.contains(current)) continue
+                    val currentIdx = queue.removeAt(0)
+                    if (processed[currentIdx]) continue
 
-                    processed.add(current)
-                    group.add(current)
+                    processed[currentIdx] = true
+                    cluster.add(elements[currentIdx])
 
-                    for (other in elements) {
-                        if (!processed.contains(other) && areElementsClose(current, other)) {
-                            queue.add(other)
+                    // Buscar elementos cercanos
+                    for (j in elements.indices) {
+                        if (!processed[j] && shouldGroupElements(elements[currentIdx], elements[j])) {
+                            queue.add(j)
                         }
                     }
                 }
 
-                if (group.size >= MIN_WORDS_PER_DIALOG) {
-                    groups.add(group)
+                if (cluster.isNotEmpty()) {
+                    clusters.add(cluster)
                 }
             }
 
-            groups
+            // Ordenar clusters por posición (arriba-izquierda primero)
+            clusters.sortBy { cluster ->
+                val firstBox = cluster.firstOrNull()?.boundingBox
+                if (firstBox != null) {
+                    firstBox.top * 10000 + firstBox.left
+                } else {
+                    Int.MAX_VALUE
+                }
+            }
+
+            android.util.Log.d("OverlayManager", "Clustered ${elements.size} elements into ${clusters.size} groups")
+            clusters
         } catch (e: Exception) {
-            android.util.Log.e("OverlayManager", "Error grouping elements", e)
-            // Fallback: cada elemento es su propio grupo
-            elements.filter { it.text.isNotBlank() }.map { listOf(it) }
+            android.util.Log.e("OverlayManager", "Error clustering elements", e)
+            listOf(elements)
         }
     }
 
-    private fun areElementsClose(element1: Text.Element, element2: Text.Element): Boolean {
+    /**
+     * Determina si dos elementos deben agruparse basándose en proximidad y alineación
+     */
+    private fun shouldGroupElements(element1: Text.Element, element2: Text.Element): Boolean {
         return try {
             val box1 = element1.boundingBox ?: return false
             val box2 = element2.boundingBox ?: return false
 
-            val centerX1 = box1.centerX()
-            val centerY1 = box1.centerY()
-            val centerX2 = box2.centerX()
-            val centerY2 = box2.centerY()
+            // Calcular distancias
+            val horizontalDistance = when {
+                box1.right < box2.left -> box2.left - box1.right
+                box2.right < box1.left -> box1.left - box2.right
+                else -> 0 // Se superponen horizontalmente
+            }
 
-            val distance = sqrt((centerX2 - centerX1).toDouble().pow(2) + (centerY2 - centerY1).toDouble().pow(2))
-            val maxDistance = max(box1.height(), box2.height()) * 2.5
+            val verticalDistance = when {
+                box1.bottom < box2.top -> box2.top - box1.bottom
+                box2.bottom < box1.top -> box1.top - box2.bottom
+                else -> 0 // Se superponen verticalmente
+            }
 
-            distance <= maxOf(PROXIMITY_THRESHOLD.toDouble(), maxDistance)
+            // Altura promedio para establecer umbrales
+            val avgHeight = (box1.height() + box2.height()) / 2f
+            val maxHorizontalGap = avgHeight * 2.0f // Permitir gaps horizontales más grandes
+            val maxVerticalGap = avgHeight * 1.5f // Gap vertical más restrictivo
+
+            // Verificar alineación vertical (están en la misma "línea")
+            val verticalOverlap = !(box1.bottom < box2.top || box2.bottom < box1.top)
+            val roughlyAligned = abs(box1.centerY() - box2.centerY()) < avgHeight * 0.8f
+
+            // Decisión de agrupamiento
+            when {
+                // Misma línea horizontal
+                verticalOverlap || roughlyAligned -> horizontalDistance <= maxHorizontalGap
+                // Líneas diferentes pero muy cercanas verticalmente
+                verticalDistance <= maxVerticalGap -> {
+                    // Deben estar razonablemente alineados horizontalmente también
+                    val horizontalOverlap = !(box1.right < box2.left || box2.right < box1.left)
+                    val horizontalAlignment = abs(box1.left - box2.left) < avgHeight * 3f
+                    horizontalOverlap || horizontalAlignment
+                }
+                else -> false
+            }
         } catch (e: Exception) {
-            android.util.Log.e("OverlayManager", "Error checking element proximity", e)
+            android.util.Log.e("OverlayManager", "Error checking element grouping", e)
             false
         }
     }
@@ -913,61 +933,6 @@ class OverlayManager(private val context: Context) {
         }
     }
 
-    private fun mergeNearbyDialogs(dialogs: List<DialogBubble>): List<DialogBubble> {
-        return try {
-            if (dialogs.size <= 1) return dialogs
-
-            val merged = mutableListOf<DialogBubble>()
-            val processed = mutableSetOf<DialogBubble>()
-
-            for (dialog in dialogs) {
-                if (processed.contains(dialog)) continue
-
-                val closeDialogs = mutableListOf(dialog)
-                processed.add(dialog)
-
-                for (other in dialogs) {
-                    if (!processed.contains(other) && areDialogsClose(dialog, other)) {
-                        closeDialogs.add(other)
-                        processed.add(other)
-                    }
-                }
-
-                if (closeDialogs.size > 1) {
-                    val mergedDialog = mergeDialogs(closeDialogs)
-                    if (mergedDialog != null) {
-                        merged.add(mergedDialog)
-                    }
-                } else {
-                    merged.add(dialog)
-                }
-            }
-
-            merged
-        } catch (e: Exception) {
-            android.util.Log.e("OverlayManager", "Error merging dialogs", e)
-            dialogs
-        }
-    }
-
-    private fun areDialogsClose(dialog1: DialogBubble, dialog2: DialogBubble): Boolean {
-        return try {
-            val box1 = dialog1.boundingBox
-            val box2 = dialog2.boundingBox
-
-            val distance = sqrt(
-                (box2.centerX() - box1.centerX()).toDouble().pow(2) +
-                        (box2.centerY() - box1.centerY()).toDouble().pow(2)
-            )
-
-            val threshold = max(box1.height(), box2.height()) * 1.5
-            distance <= threshold
-        } catch (e: Exception) {
-            android.util.Log.e("OverlayManager", "Error checking dialog proximity", e)
-            false
-        }
-    }
-
     private fun mergeDialogs(dialogs: List<DialogBubble>): DialogBubble? {
         return try {
             if (dialogs.isEmpty()) return null
@@ -1006,6 +971,78 @@ class OverlayManager(private val context: Context) {
         }
     }
 
+    /**
+     * Fusiona diálogos que se superponen o están muy cercanos
+     */
+    private fun mergeOverlappingDialogs(dialogs: List<DialogBubble>): List<DialogBubble> {
+        return try {
+            if (dialogs.size <= 1) return dialogs
+
+            val merged = mutableListOf<DialogBubble>()
+            val processed = BooleanArray(dialogs.size)
+
+            for (i in dialogs.indices) {
+                if (processed[i]) continue
+
+                val toMerge = mutableListOf(dialogs[i])
+                processed[i] = true
+
+                // Buscar diálogos que se superponen o están muy cercanos
+                for (j in i + 1 until dialogs.size) {
+                    if (!processed[j] && shouldMergeDialogs(dialogs[i], dialogs[j])) {
+                        toMerge.add(dialogs[j])
+                        processed[j] = true
+                    }
+                }
+
+                if (toMerge.size > 1) {
+                    val mergedDialog = mergeDialogs(toMerge)
+                    if (mergedDialog != null) {
+                        merged.add(mergedDialog)
+                    }
+                } else {
+                    merged.add(dialogs[i])
+                }
+            }
+
+            android.util.Log.d("OverlayManager", "Merged ${dialogs.size} dialogs into ${merged.size}")
+            merged
+        } catch (e: Exception) {
+            android.util.Log.e("OverlayManager", "Error merging dialogs", e)
+            dialogs
+        }
+    }
+
+    /**
+     * Determina si dos diálogos deben fusionarse
+     */
+    private fun shouldMergeDialogs(dialog1: DialogBubble, dialog2: DialogBubble): Boolean {
+        return try {
+            val box1 = dialog1.boundingBox
+            val box2 = dialog2.boundingBox
+
+            // Verificar superposición directa
+            if (Rect.intersects(box1, box2)) {
+                return true
+            }
+
+            // Calcular distancia entre centros
+            val centerDistance = sqrt(
+                (box2.centerX() - box1.centerX()).toDouble().pow(2) +
+                        (box2.centerY() - box1.centerY()).toDouble().pow(2)
+            )
+
+            // Umbral basado en el tamaño de los diálogos
+            val avgSize = (max(box1.width(), box1.height()) + max(box2.width(), box2.height())) / 2f
+            val mergeThreshold = avgSize * 0.8f // Más restrictivo para evitar fusiones innecesarias
+
+            centerDistance <= mergeThreshold
+        } catch (e: Exception) {
+            android.util.Log.e("OverlayManager", "Error checking dialog merge", e)
+            false
+        }
+    }
+
     private fun createOptimizedTranslationViews(
         dialogBubbles: List<DialogBubble>,
         translatedTexts: List<String>
@@ -1024,64 +1061,271 @@ class OverlayManager(private val context: Context) {
         }
     }
 
+    /**
+     * Encuentra la posición óptima para el texto traducido evitando superposiciones
+     */
+    private fun findOptimalPosition(originalBox: Rect, textView: TextView): android.graphics.Point {
+        return try {
+            // Medir el TextView de manera más precisa
+            val widthSpec = View.MeasureSpec.makeMeasureSpec(
+                minOf(originalBox.width() + 80, windowManager.defaultDisplay.width - 40),
+                View.MeasureSpec.AT_MOST
+            )
+            val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+
+            textView.measure(widthSpec, heightSpec)
+
+            val width = textView.measuredWidth
+            val height = textView.measuredHeight
+
+            val screenWidth = windowManager.defaultDisplay.width
+            val screenHeight = windowManager.defaultDisplay.height
+
+            // Margen de seguridad
+            val margin = 20
+
+            // Estrategia de posicionamiento: priorizar posiciones que no se superpongan
+            val candidates = generatePositionCandidates(originalBox, width, height, margin, screenWidth, screenHeight)
+
+            // Evaluar cada candidato y seleccionar el mejor
+            var bestCandidate: android.graphics.Point? = null
+            var bestScore = Float.MAX_VALUE
+
+            for (candidate in candidates) {
+                val candidateRect = Rect(candidate.x, candidate.y, candidate.x + width, candidate.y + height)
+
+                // Calcular score (menor es mejor)
+                var score = 0f
+
+                // Penalizar superposiciones con otras traducciones
+                var hasCollision = false
+                for (occupied in occupiedAreas) {
+                    if (Rect.intersects(candidateRect, occupied)) {
+                        hasCollision = true
+                        score += 1000f // Penalización alta por colisión
+
+                        // Calcular área de superposición
+                        val intersection = Rect(candidateRect)
+                        if (intersection.intersect(occupied)) {
+                            val overlapArea = intersection.width() * intersection.height()
+                            score += overlapArea.toFloat()
+                        }
+                    }
+                }
+
+                // Penalizar superposición con texto original
+                if (Rect.intersects(candidateRect, originalBox)) {
+                    val intersection = Rect(candidateRect)
+                    if (intersection.intersect(originalBox)) {
+                        val overlapArea = intersection.width() * intersection.height()
+                        score += overlapArea.toFloat() * 0.5f // Menor penalización que con otras traducciones
+                    }
+                }
+
+                // Penalizar si está fuera de la pantalla
+                if (candidate.x < 0 || candidate.y < 0 ||
+                    candidate.x + width > screenWidth ||
+                    candidate.y + height > screenHeight) {
+                    score += 500f
+                }
+
+                // Preferir posiciones debajo del texto original
+                if (candidate.y > originalBox.bottom) {
+                    score -= 50f
+                }
+
+                // Preferir posiciones con buena alineación horizontal
+                val horizontalAlignment = abs(candidate.x - originalBox.left)
+                score += horizontalAlignment * 0.1f
+
+                if (score < bestScore) {
+                    bestScore = score
+                    bestCandidate = candidate
+                }
+            }
+
+            val finalPosition = bestCandidate ?: candidates.first()
+
+            // Ajustar para asegurar que está dentro de la pantalla
+            val adjustedX = maxOf(margin, minOf(finalPosition.x, screenWidth - width - margin))
+            val adjustedY = maxOf(margin, minOf(finalPosition.y, screenHeight - height - 80))
+
+            val finalRect = Rect(adjustedX, adjustedY, adjustedX + width, adjustedY + height)
+            occupiedAreas.add(finalRect)
+
+            android.util.Log.d("OverlayManager", "Found position at ($adjustedX, $adjustedY) with score $bestScore")
+            android.graphics.Point(adjustedX, adjustedY)
+
+        } catch (e: Exception) {
+            android.util.Log.e("OverlayManager", "Error finding optimal position", e)
+            val fallbackX = maxOf(10, minOf(originalBox.left, windowManager.defaultDisplay.width - 100))
+            val fallbackY = maxOf(10, minOf(originalBox.bottom + 20, windowManager.defaultDisplay.height - 100))
+            android.graphics.Point(fallbackX, fallbackY)
+        }
+    }
+
+    /**
+     * Genera candidatos de posición en orden de prioridad
+     */
+    private fun generatePositionCandidates(
+        originalBox: Rect,
+        width: Int,
+        height: Int,
+        margin: Int,
+        screenWidth: Int,
+        screenHeight: Int
+    ): List<android.graphics.Point> {
+        val candidates = mutableListOf<android.graphics.Point>()
+        val spacing = 15
+
+        // Prioridad 1: Debajo, alineado a la izquierda
+        candidates.add(android.graphics.Point(
+            originalBox.left,
+            originalBox.bottom + spacing
+        ))
+
+        // Prioridad 2: Debajo, centrado
+        candidates.add(android.graphics.Point(
+            originalBox.centerX() - width / 2,
+            originalBox.bottom + spacing
+        ))
+
+        // Prioridad 3: Arriba, alineado a la izquierda
+        candidates.add(android.graphics.Point(
+            originalBox.left,
+            originalBox.top - height - spacing
+        ))
+
+        // Prioridad 4: Arriba, centrado
+        candidates.add(android.graphics.Point(
+            originalBox.centerX() - width / 2,
+            originalBox.top - height - spacing
+        ))
+
+        // Prioridad 5: A la derecha
+        candidates.add(android.graphics.Point(
+            originalBox.right + spacing,
+            originalBox.top
+        ))
+
+        // Prioridad 6: A la izquierda
+        candidates.add(android.graphics.Point(
+            originalBox.left - width - spacing,
+            originalBox.top
+        ))
+
+        // Prioridad 7: Debajo a la derecha
+        candidates.add(android.graphics.Point(
+            originalBox.right - width,
+            originalBox.bottom + spacing
+        ))
+
+        // Prioridad 8: Arriba a la derecha
+        candidates.add(android.graphics.Point(
+            originalBox.right - width,
+            originalBox.top - height - spacing
+        ))
+
+        // Prioridad 9: Posiciones adicionales con más separación
+        val largeSpacing = spacing * 3
+        candidates.add(android.graphics.Point(
+            originalBox.left,
+            originalBox.bottom + largeSpacing
+        ))
+        candidates.add(android.graphics.Point(
+            originalBox.left,
+            originalBox.top - height - largeSpacing
+        ))
+
+        return candidates
+    }
+
     private fun createDialogTranslationView(dialog: DialogBubble, translation: String) {
         try {
             val originalBox = dialog.boundingBox
 
             val textView = TextView(context).apply {
                 text = translation
-                setTextColor(android.graphics.Color.WHITE)
+                setTextColor(android.graphics.Color.WHITE) // NO CAMBIA COLOR DEL TEXTVIEW
 
                 when (dialog.estimatedType) {
                     DialogType.SPEECH_BUBBLE -> {
-                        setBackgroundColor("#DD1976D2".toColorInt()) // Más opaco
                         textSize = fontSize
                     }
                     DialogType.THOUGHT_BUBBLE -> {
-                        setBackgroundColor("#DD9C27B0".toColorInt())
                         textSize = fontSize * 0.9f
                     }
                     DialogType.NARRATIVE_TEXT -> {
-                        setBackgroundColor("#DD424242".toColorInt())
                         textSize = fontSize * 0.85f
                     }
                     DialogType.SOUND_EFFECT -> {
-                        setBackgroundColor("#DDF57C00".toColorInt())
                         textSize = fontSize * 1.1f
                         typeface = android.graphics.Typeface.DEFAULT_BOLD
                     }
                 }
 
-                setPadding(16, 12, 16, 12)
-                setShadowLayer(6f, 2f, 2f, android.graphics.Color.BLACK) // Sombra más pronunciada
+                setPadding(20, 14, 20, 14)
+
+                // Sombra más pronunciada para mejor legibilidad
+                setShadowLayer(8f, 3f, 3f, android.graphics.Color.BLACK)
+
+                // Configurar líneas según tamaño del diálogo
                 maxLines = calculateMaxLines(dialog)
                 ellipsize = android.text.TextUtils.TruncateAt.END
 
-                // Aplicar estilo adicional para mejor visibilidad
+                // Mejor legibilidad
                 textAlignment = TextView.TEXT_ALIGNMENT_CENTER
-                setLineSpacing(4f, 1.1f) // Mejor espaciado entre líneas
+                setLineSpacing(5f, 1.15f)
+
+                // Bordes redondeados mediante drawable
+                background = createRoundedBackground(dialog.estimatedType)
             }
 
-            // Posicionar el TextView de manera más estable
+            // Posicionar el TextView de manera óptima
             val position = findOptimalPosition(originalBox, textView)
 
+            // Ancho máximo basado en el texto original con padding adicional
+            val maxWidth = minOf(
+                originalBox.width() + 100,
+                windowManager.defaultDisplay.width - 60
+            )
+
             val layoutParams = FrameLayout.LayoutParams(
-                minOf(originalBox.width() + 60, windowManager.defaultDisplay.width - 60),
+                maxWidth,
                 FrameLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 leftMargin = position.x
                 topMargin = position.y
-                // Asegurar que esté dentro de los límites de pantalla
-                leftMargin = maxOf(10, minOf(leftMargin, windowManager.defaultDisplay.width - width - 10))
-                topMargin = maxOf(10, minOf(topMargin, windowManager.defaultDisplay.height - 100))
             }
 
             translationView?.addView(textView, layoutParams)
 
-            android.util.Log.d("OverlayManager", "Added translation view at (${position.x}, ${position.y}) with text: ${translation.take(50)}")
+            android.util.Log.d("OverlayManager",
+                "Added translation at (${position.x}, ${position.y}): ${translation.take(30)}...")
 
         } catch (e: Exception) {
             android.util.Log.e("OverlayManager", "Error creating dialog translation view", e)
+        }
+    }
+
+    /**
+     * Crea un drawable con bordes redondeados para mejor apariencia
+     */
+    private fun createRoundedBackground(dialogType: DialogType): android.graphics.drawable.GradientDrawable {
+        return android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+            cornerRadius = 12f // Bordes redondeados
+
+            // Color según tipo de diálogo
+            setColor(when (dialogType) {
+                DialogType.SPEECH_BUBBLE -> "#E01976D2".toColorInt() //FONDO DEL TEXTVIEW COLOR
+                DialogType.THOUGHT_BUBBLE -> "#E09C27B0".toColorInt()
+                DialogType.NARRATIVE_TEXT -> "#E0424242".toColorInt()
+                DialogType.SOUND_EFFECT -> "#E0F57C00".toColorInt()
+            })
+
+            // Borde sutil para mejor definición
+            setStroke(2, android.graphics.Color.BLACK)
         }
     }
 
@@ -1099,100 +1343,6 @@ class OverlayManager(private val context: Context) {
             }
         } catch (e: Exception) {
             3 // Default seguro
-        }
-    }
-
-    private fun findOptimalPosition(originalBox: Rect, textView: TextView): android.graphics.Point {
-        return try {
-            // Medir el TextView de manera más precisa
-            val widthSpec = View.MeasureSpec.makeMeasureSpec(
-                minOf(originalBox.width() + 60, windowManager.defaultDisplay.width - 60),
-                View.MeasureSpec.AT_MOST
-            )
-            val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-
-            textView.measure(widthSpec, heightSpec)
-
-            val width = textView.measuredWidth
-            val height = textView.measuredHeight
-
-            val screenWidth = windowManager.defaultDisplay.width
-            val screenHeight = windowManager.defaultDisplay.height
-
-            // Posiciones candidatas mejoradas con mejor spacing
-            val spacing = 15
-            val candidates = listOf(
-                // Debajo del texto original
-                android.graphics.Point(
-                    originalBox.left,
-                    originalBox.bottom + spacing
-                ),
-                // Encima del texto original
-                android.graphics.Point(
-                    originalBox.left,
-                    originalBox.top - height - spacing
-                ),
-                // A la derecha
-                android.graphics.Point(
-                    originalBox.right + spacing,
-                    originalBox.top
-                ),
-                // A la izquierda
-                android.graphics.Point(
-                    originalBox.left - width - spacing,
-                    originalBox.top
-                ),
-                // Centrado debajo con offset
-                android.graphics.Point(
-                    originalBox.centerX() - width / 2,
-                    originalBox.bottom + spacing
-                ),
-                // Centrado encima con offset
-                android.graphics.Point(
-                    originalBox.centerX() - width / 2,
-                    originalBox.top - height - spacing
-                ),
-                // Como último recurso, superpuesto pero ligeramente desplazado
-                android.graphics.Point(
-                    originalBox.left + 10,
-                    originalBox.top - 5
-                )
-            )
-
-            for (candidate in candidates) {
-                // Ajustar para que esté dentro de la pantalla
-                val adjustedX = maxOf(5, minOf(candidate.x, screenWidth - width - 5))
-                val adjustedY = maxOf(5, minOf(candidate.y, screenHeight - height - 50)) // Dejar espacio para bottom bar
-
-                val adjustedCandidate = android.graphics.Point(adjustedX, adjustedY)
-                val candidateRect = Rect(adjustedX, adjustedY, adjustedX + width, adjustedY + height)
-
-                // Verificar colisión con otras traducciones
-                val hasCollision = occupiedAreas.any { occupied ->
-                    Rect.intersects(candidateRect, occupied)
-                }
-
-                if (!hasCollision) {
-                    occupiedAreas.add(candidateRect)
-                    android.util.Log.d("OverlayManager", "Found optimal position: ($adjustedX, $adjustedY)")
-                    return adjustedCandidate
-                }
-            }
-
-            // Si todas las posiciones tienen colisión, usar la primera con ajuste adicional
-            val fallback = candidates.first()
-            val finalX = maxOf(5, minOf(fallback.x, screenWidth - width - 5))
-            val finalY = maxOf(5, minOf(fallback.y, screenHeight - height - 50))
-
-            val fallbackRect = Rect(finalX, finalY, finalX + width, finalY + height)
-            occupiedAreas.add(fallbackRect)
-
-            android.util.Log.d("OverlayManager", "Using fallback position: ($finalX, $finalY)")
-            android.graphics.Point(finalX, finalY)
-
-        } catch (e: Exception) {
-            android.util.Log.e("OverlayManager", "Error finding optimal position", e)
-            android.graphics.Point(originalBox.left, originalBox.bottom + 20)
         }
     }
 
@@ -1311,8 +1461,7 @@ class OverlayManager(private val context: Context) {
 
             val textView = TextView(context).apply {
                 this.text = text.trim()
-                setTextColor(android.graphics.Color.WHITE)
-                setBackgroundColor("#DD000000".toColorInt()) // Más opaco
+                setTextColor(android.graphics.Color.WHITE) //COLOR EN TEXTVIEW
                 textSize = fontSize
                 setPadding(16, 12, 16, 12)
                 setShadowLayer(4f, 2f, 2f, android.graphics.Color.BLACK)
@@ -1320,6 +1469,9 @@ class OverlayManager(private val context: Context) {
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 textAlignment = TextView.TEXT_ALIGNMENT_CENTER
                 setLineSpacing(2f, 1.1f)
+
+                // Usar drawable redondeado
+                background = createRoundedBackground(DialogType.SPEECH_BUBBLE)
             }
 
             // Medir con límites más realistas
@@ -1496,7 +1648,6 @@ class OverlayManager(private val context: Context) {
         }
     }
 
-
     /**
      * Método de limpieza mejorado con mejor manejo de recursos
      */
@@ -1514,6 +1665,10 @@ class OverlayManager(private val context: Context) {
             // Cancelar long press
             longPressRunnable?.let { handler.removeCallbacks(it) }
             longPressRunnable = null
+
+            // Cancelar fade out
+            fadeOutRunnable?.let { fadeOutHandler.removeCallbacks(it) }
+            fadeOutRunnable = null
 
             // Ocultar overlay de traducción
             hideTranslationOverlay()
@@ -1557,6 +1712,7 @@ class OverlayManager(private val context: Context) {
             translationDismissRunnable = null
             continuousReadingRunnable = null
             longPressRunnable = null
+            fadeOutRunnable = null
 
             // Resetear estado
             isCapturing = false

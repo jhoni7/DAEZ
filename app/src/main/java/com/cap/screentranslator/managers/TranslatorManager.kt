@@ -53,6 +53,104 @@ class TranslatorManager {
         }
     }
 
+    /**
+     * NUEVO: Traduce una lista de textos individuales
+     * Este método mantiene el orden y la correspondencia 1:1 entre entrada y salida
+     */
+    fun translateTextsByList(
+        visionText: com.google.mlkit.vision.text.Text,
+        textsToTranslate: List<String>,
+        detectedSourceLanguage: String
+    ) {
+        if (textsToTranslate.isEmpty()) {
+            Log.w("Translator", "Empty texts list provided")
+            onTranslationCompleteListener?.invoke(visionText, emptyList())
+            return
+        }
+
+        // If target language is same as detected source, no translation needed
+        if (detectedSourceLanguage == targetLanguage) {
+            Log.d("Translator", "Source and target languages are the same ($detectedSourceLanguage), no translation needed")
+            onTranslationCompleteListener?.invoke(visionText, textsToTranslate)
+            return
+        }
+
+        // Create appropriate translator for detected language
+        val translatorToUse = if (sourceLanguage == "auto") {
+            createTranslatorForLanguages(detectedSourceLanguage, targetLanguage)
+        } else {
+            currentTranslator
+        }
+
+        if (translatorToUse != null) {
+            Log.d("Translator", "Translating ${textsToTranslate.size} individual texts from $detectedSourceLanguage to $targetLanguage")
+            translateTextsSequentially(textsToTranslate, translatorToUse, visionText, detectedSourceLanguage)
+        } else {
+            Log.w("Translator", "No translator available, returning original texts")
+            onTranslationCompleteListener?.invoke(visionText, textsToTranslate)
+        }
+    }
+
+    /**
+     * Traduce una lista de textos de forma secuencial, manteniendo el orden
+     */
+    private fun translateTextsSequentially(
+        texts: List<String>,
+        translator: Translator,
+        visionText: com.google.mlkit.vision.text.Text,
+        detectedSourceLanguage: String
+    ) {
+        val translatedTexts = MutableList(texts.size) { "" }
+        var completedTranslations = 0
+
+        val checkIfComplete = {
+            if (completedTranslations == texts.size) {
+                Log.d("Translator", "All ${texts.size} texts translated successfully")
+
+                // Log de resultados para debug
+                translatedTexts.forEachIndexed { index, translation ->
+                    Log.d("Translator", "Text ${index + 1}/${texts.size}: '${texts[index].take(30)}...' -> '${translation.take(30)}...'")
+                }
+
+                onTranslationCompleteListener?.invoke(visionText, translatedTexts)
+                cleanupTemporaryTranslator(translator, detectedSourceLanguage)
+            }
+        }
+
+        texts.forEachIndexed { index, text ->
+            val trimmedText = text.trim()
+
+            if (trimmedText.isEmpty()) {
+                Log.d("Translator", "Text ${index + 1}/${texts.size} is empty, skipping")
+                translatedTexts[index] = ""
+                completedTranslations++
+                checkIfComplete()
+                return@forEachIndexed
+            }
+
+            Log.d("Translator", "Translating text ${index + 1}/${texts.size}: ${trimmedText.take(50)}...")
+
+            translator.translate(trimmedText)
+                .addOnSuccessListener { translated ->
+                    translatedTexts[index] = translated
+                    completedTranslations++
+                    Log.d("Translator", "Text ${index + 1} translated successfully: ${translated.take(50)}...")
+                    checkIfComplete()
+                }
+                .addOnFailureListener { exception ->
+                    Log.e("Translator", "Failed to translate text ${index + 1}", exception)
+                    // En caso de error, usar el texto original
+                    translatedTexts[index] = trimmedText
+                    completedTranslations++
+                    checkIfComplete()
+                }
+        }
+    }
+
+    /**
+     * MÉTODO ORIGINAL: Traduce por bloques de texto de visionText
+     * Mantenido para compatibilidad hacia atrás
+     */
     fun translateTextByBlocks(visionText: com.google.mlkit.vision.text.Text, detectedSourceLanguage: String) {
         val textBlocks = visionText.textBlocks
 
@@ -78,7 +176,6 @@ class TranslatorManager {
 
         if (translatorToUse != null) {
             Log.d("Translator", "Translating ${textBlocks.size} blocks from $detectedSourceLanguage to $targetLanguage")
-
             translateBlocksSequentially(textBlocks, translatorToUse, visionText, detectedSourceLanguage)
         } else {
             Log.w("Translator", "No translator available, returning original text")
@@ -96,7 +193,6 @@ class TranslatorManager {
         val translatedTexts = MutableList(textBlocks.size) { "" }
         var completedTranslations = 0
 
-        // ✅ Definimos la función como lambda antes del uso
         val checkIfComplete = {
             if (completedTranslations == textBlocks.size) {
                 onTranslationCompleteListener?.invoke(visionText, translatedTexts)
@@ -127,9 +223,6 @@ class TranslatorManager {
                 }
         }
     }
-
-
-
 
     private fun cleanupTemporaryTranslator(translator: Translator, detectedSourceLanguage: String) {
         if (sourceLanguage == "auto" && translator != currentTranslator) {
