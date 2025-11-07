@@ -314,31 +314,19 @@ class MainService : Service() {
     }
 
     private fun showTranslations(visionText: com.google.mlkit.vision.text.Text, translatedTexts: List<String>) {
-        val dialogBubbles = currentDialogBubbles
+        try {
+            // Mostrar directamente las traducciones sin depender del contexto guardado
+            overlayManager.showTranslationOverlay(visionText, translatedTexts)
 
-        if (dialogBubbles == null) {
-            Log.e("MainService", "Missing dialog bubbles context for display")
-            overlayManager.handleProcessingError(Exception("Missing display context"))
-            return
+            // Limpiar estado previo
+            currentDialogBubbles = null
+            currentTextsToTranslate = null
+        } catch (e: Exception) {
+            Log.e("MainService", "Error displaying translations", e)
+            overlayManager.handleProcessingError(e)
         }
-
-        // Verificar que tenemos la misma cantidad de traducciones que globos
-        if (translatedTexts.size != dialogBubbles.size) {
-            Log.w("MainService", "Mismatch: ${translatedTexts.size} translations for ${dialogBubbles.size} bubbles")
-        }
-
-        // Log de resultados
-        translatedTexts.forEachIndexed { index, translation ->
-            Log.d("MainService", "Translation ${index + 1}: ${translation.take(50)}${if (translation.length > 50) "..." else ""}")
-        }
-
-        // Mostrar traducciones
-        overlayManager.showTranslationOverlay(visionText, translatedTexts)
-
-        // Limpiar contexto
-        currentDialogBubbles = null
-        currentTextsToTranslate = null
     }
+
 
     private fun stopService() {
         stopSelf()
