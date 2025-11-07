@@ -40,6 +40,8 @@ Interfaz intuitiva y fácil de usar
 <img width="348" height="785" alt="image" src="https://github.com/user-attachments/assets/2e207920-4d05-4415-ac7b-91b037b5633a" />
 
 
+* version 4.8 / se corrige y mejora contexto y extracción de texto.
+  
 * version 4.7 / se modifico el boton "capturar / conntinuo" haciendo que el mismo sea flotante y trasparente.
 
 * version 4.6 / se corrigue error de colores que generaba el boton "capturar / continuo".
