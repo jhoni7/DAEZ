@@ -128,9 +128,17 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="20dp"
-            android:max="32"
-            android:min="12"
             android:progress="16" />
+
+        <Button
+            android:id="@+id/btn_manage_models"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/button_settings_background"
+            android:text="Gestionar Modelos Descargados"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
 
     </LinearLayout>
 

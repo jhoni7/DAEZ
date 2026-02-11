@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "screentranslator"
+rootProject.name = "DAEZKit"
 include(":app")
  

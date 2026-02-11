@@ -4,15 +4,15 @@ plugins {
 }
 
 android {
-    namespace = "com.cap.screentranslator"
+    namespace = "com.DAEZ.DAEZKit"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.cap.screentranslator"
+        applicationId = "com.DAEZ.DAEZKit"
         minSdk = 29
         targetSdk = 36
         versionCode = 1
-        versionName = "4.9"
+        versionName = "4.9.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
